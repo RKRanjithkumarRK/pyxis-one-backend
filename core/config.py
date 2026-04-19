@@ -14,10 +14,14 @@ class Settings(BaseSettings):
     @field_validator("ANTHROPIC_API_KEY")
     @classmethod
     def validate_api_key(cls, v: str) -> str:
-        if not v or v.strip() == "your_key_here":
+        placeholders = {"your_key_here", "placeholder", "sk-ant-test-placeholder-replace-with-real-key", ""}
+        if not v or v.strip().lower() in placeholders or "placeholder" in v.lower():
             raise ValueError(
-                "ANTHROPIC_API_KEY must be set to a real key. "
-                "Copy .env.example to .env and add your Anthropic API key."
+                "\n\n  ❌  ANTHROPIC_API_KEY is not set.\n"
+                "  1. Get your key: https://console.anthropic.com/settings/keys\n"
+                "  2. Open pyxis-one-backend/.env\n"
+                "  3. Replace the placeholder with your real key\n"
+                "  4. Restart the server\n"
             )
         return v
 

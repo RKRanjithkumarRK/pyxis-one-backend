@@ -73,7 +73,13 @@ app.include_router(analytics.router, prefix="/api")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "pyxis-one-backend"}
+    key = settings.ANTHROPIC_API_KEY
+    key_ok = key and not any(p in key.lower() for p in ["placeholder", "test", "your_key"])
+    return {
+        "status": "ok",
+        "service": "pyxis-one-backend",
+        "api_key_configured": key_ok,
+    }
 
 
 @app.get("/")
