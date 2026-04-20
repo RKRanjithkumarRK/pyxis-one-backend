@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"
     PORT: int = 8000
     FRONTEND_URL: str = "http://localhost:3000"
+    ALLOWED_ORIGINS: str = "https://pyxis-one-frontend.vercel.app,http://localhost:3000"
 
     @field_validator("ANTHROPIC_API_KEY")
     @classmethod
@@ -54,4 +55,4 @@ Tag every factual claim with exactly one of:
 [VERIFIED] [CONSENSUS] [DEBATED] [SPECULATIVE]
 """
 
-DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+DEFAULT_MODEL = "claude-sonnet-4-6"
