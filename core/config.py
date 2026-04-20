@@ -1,30 +1,19 @@
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    ANTHROPIC_API_KEY: str
+    # At least one provider key must be set. Checked at runtime in ai_client.
+    ANTHROPIC_API_KEY: str = ""
+    GROQ_API_KEY: str = ""       # Free: https://console.groq.com
+    GEMINI_API_KEY: str = ""     # Free: https://aistudio.google.com/app/apikey
+
     DATABASE_URL: str = "sqlite+aiosqlite:///./pyxis.db"
     SECRET_KEY: str = "changeme-in-production"
     ENVIRONMENT: str = "production"
     PORT: int = 8000
     FRONTEND_URL: str = "http://localhost:3000"
     ALLOWED_ORIGINS: str = "https://pyxis-one-frontend.vercel.app,http://localhost:3000"
-
-    @field_validator("ANTHROPIC_API_KEY")
-    @classmethod
-    def validate_api_key(cls, v: str) -> str:
-        placeholders = {"your_key_here", "placeholder", "sk-ant-test-placeholder-replace-with-real-key", ""}
-        if not v or v.strip().lower() in placeholders or "placeholder" in v.lower():
-            raise ValueError(
-                "\n\n  ❌  ANTHROPIC_API_KEY is not set.\n"
-                "  1. Get your key: https://console.anthropic.com/settings/keys\n"
-                "  2. Open pyxis-one-backend/.env\n"
-                "  3. Replace the placeholder with your real key\n"
-                "  4. Restart the server\n"
-            )
-        return v
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
