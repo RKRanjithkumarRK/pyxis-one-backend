@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # ── App ──────────────────────────────────────────────────────────────────
     ENVIRONMENT:     str = "production"
-    PORT:            int = 8000
+    PORT:            int = 7860
     FRONTEND_URL:    str = "http://localhost:3000"
     ALLOWED_ORIGINS: str = "https://pyxis-one-frontend.vercel.app,http://localhost:3000"
 
