@@ -1,10 +1,13 @@
 """
 Model router — selects the best model given intent + user tier + manual override.
 
-Provider lineup (no Anthropic):
-  Groq   — free, ultra-fast (Llama, Mixtral, Gemma)
-  Gemini — free generous tier, huge context (Gemini 2.0/1.5)
-  OpenAI — paid, best tools & coding (GPT-4o)
+Provider lineup (6 providers, no Anthropic):
+  Groq       — free, ultra-fast (Llama, Mixtral, Gemma)
+  Gemini     — free generous tier, huge context (Gemini 2.0/1.5)
+  Cerebras   — free, 1,000+ tok/s on WSE silicon
+  Mistral    — free La Plateforme tier (Mistral Small, Codestral, Nemo)
+  SambaNova  — free (DeepSeek V3, Qwen 2.5, Llama 70B)
+  OpenAI     — paid, best tools & coding (GPT-4o)
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from core.pipeline.intent_classifier import RouterDecision
 @dataclass
 class ModelSelection:
     model:        str
-    provider:     str          # openai | groq | gemini
+    provider:     str          # openai | groq | gemini | cerebras | mistral | sambanova
     persona:      str          # "structured" | "analytical"
     inject_tools: list[str]
     max_tokens:   int
@@ -29,12 +32,12 @@ class ModelSelection:
 
 _INTENT_TO_MODEL: dict[str, dict[str, str]] = {
     "free": {
-        "coding":    "llama-3.3-70b-versatile",   # Llama is excellent at code
-        "math":      "gemini-2.0-flash",           # Gemini handles math well
+        "coding":    "sambanova/deepseek-v3",      # DeepSeek rivals GPT-4o at code, free
+        "math":      "sambanova/deepseek-v3",      # Top math on SambaNova
         "reasoning": "gemini-2.0-flash",           # 1M ctx, strong reasoning
-        "creative":  "llama-3.3-70b-versatile",
+        "creative":  "llama-3.3-70b-versatile",    # Llama is fluid and creative
         "vision":    "gemini-2.0-flash",           # Gemini has vision
-        "fast":      "llama-3.1-8b-instant",       # Sub-second responses
+        "fast":      "cerebras/llama3.1-8b",       # 2,000 tok/s — fastest 8B
         "default":   "gemini-2.0-flash",
     },
     "pro": {
@@ -43,7 +46,7 @@ _INTENT_TO_MODEL: dict[str, dict[str, str]] = {
         "reasoning": "gemini-1.5-pro",
         "creative":  "gemini-1.5-pro",
         "vision":    "gpt-4o",                     # OpenAI vision quality
-        "fast":      "llama-3.1-8b-instant",
+        "fast":      "cerebras/llama3.1-8b",
         "default":   "gemini-1.5-pro",
     },
     "enterprise": {
@@ -52,7 +55,7 @@ _INTENT_TO_MODEL: dict[str, dict[str, str]] = {
         "reasoning": "gemini-1.5-pro",
         "creative":  "gemini-1.5-pro",
         "vision":    "gpt-4o",
-        "fast":      "llama-3.1-8b-instant",
+        "fast":      "cerebras/llama3.1-8b",
         "default":   "gemini-1.5-pro",
     },
 }
@@ -69,34 +72,64 @@ _TOOL_MAP: dict[str, list[str]] = {
 
 # provider + persona for each model
 _PROVIDER_MAP: dict[str, tuple[str, str]] = {
-    "gpt-4o":                   ("openai",  "structured"),
-    "gpt-4o-mini":              ("openai",  "structured"),
-    "gemini-2.0-flash":         ("gemini",  "analytical"),
-    "gemini-1.5-pro":           ("gemini",  "analytical"),
-    "gemini-1.5-flash":         ("gemini",  "analytical"),
-    "llama-3.3-70b-versatile":  ("groq",    "structured"),
-    "llama-3.1-8b-instant":     ("groq",    "structured"),
-    "mixtral-8x7b-32768":       ("groq",    "structured"),
-    "gemma2-9b-it":             ("groq",    "structured"),
+    # OpenAI
+    "gpt-4o":                            ("openai",     "structured"),
+    "gpt-4o-mini":                       ("openai",     "structured"),
+    # Gemini
+    "gemini-2.0-flash":                  ("gemini",     "analytical"),
+    "gemini-1.5-pro":                    ("gemini",     "analytical"),
+    "gemini-1.5-flash":                  ("gemini",     "analytical"),
+    # Groq
+    "llama-3.3-70b-versatile":           ("groq",       "structured"),
+    "llama-3.1-8b-instant":              ("groq",       "structured"),
+    "mixtral-8x7b-32768":                ("groq",       "structured"),
+    "gemma2-9b-it":                      ("groq",       "structured"),
+    # Cerebras
+    "cerebras/llama-3.3-70b":            ("cerebras",   "structured"),
+    "cerebras/llama3.1-8b":              ("cerebras",   "structured"),
+    # Mistral
+    "mistral-small-3.1-24b-instruct":    ("mistral",    "analytical"),
+    "codestral-2501":                    ("mistral",    "structured"),
+    "open-mistral-nemo":                 ("mistral",    "structured"),
+    # SambaNova
+    "sambanova/deepseek-v3":             ("sambanova",  "analytical"),
+    "sambanova/qwen2.5-72b":             ("sambanova",  "analytical"),
+    "sambanova/llama-3.3-70b":           ("sambanova",  "structured"),
 }
 
 _MAX_TOKENS: dict[str, int] = {
-    "gpt-4o":                   4096,
-    "gpt-4o-mini":              4096,
-    "gemini-2.0-flash":         8192,
-    "gemini-1.5-pro":           8192,
-    "gemini-1.5-flash":         8192,
-    "llama-3.3-70b-versatile":  4096,
-    "llama-3.1-8b-instant":     4096,
-    "mixtral-8x7b-32768":       4096,
-    "gemma2-9b-it":             2048,
+    # OpenAI
+    "gpt-4o":                            4096,
+    "gpt-4o-mini":                       4096,
+    # Gemini
+    "gemini-2.0-flash":                  8192,
+    "gemini-1.5-pro":                    8192,
+    "gemini-1.5-flash":                  8192,
+    # Groq (capped at 8192 by provider)
+    "llama-3.3-70b-versatile":           4096,
+    "llama-3.1-8b-instant":              4096,
+    "mixtral-8x7b-32768":                4096,
+    "gemma2-9b-it":                      2048,
+    # Cerebras (capped at 8192)
+    "cerebras/llama-3.3-70b":            4096,
+    "cerebras/llama3.1-8b":              4096,
+    # Mistral
+    "mistral-small-3.1-24b-instruct":    4096,
+    "codestral-2501":                    4096,
+    "open-mistral-nemo":                 4096,
+    # SambaNova (capped at 8192)
+    "sambanova/deepseek-v3":             4096,
+    "sambanova/qwen2.5-72b":             4096,
+    "sambanova/llama-3.3-70b":           4096,
 }
 
-# Models where tool-calling is reliable
+# Models where tool-calling is reliable (SambaNova skipped — unstable)
 _TOOL_CAPABLE: set[str] = {
     "gpt-4o", "gpt-4o-mini",
     "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash",
     "llama-3.3-70b-versatile", "llama-3.1-8b-instant",
+    "cerebras/llama-3.3-70b", "cerebras/llama3.1-8b",
+    "mistral-small-3.1-24b-instruct", "codestral-2501", "open-mistral-nemo",
 }
 
 
@@ -142,6 +175,7 @@ def _gate_model(model: str, tier: str) -> str:
     pro_only = {"gpt-4o", "gemini-1.5-pro"}
     if model in pro_only and tier == "free":
         return "gemini-2.0-flash" if model == "gemini-1.5-pro" else "gpt-4o-mini"
+    # Unknown model IDs pass through — unified_client handles them
     return model
 
 
