@@ -1,23 +1,29 @@
 """
-Unified streaming client for OpenAI (GPT-4o) and Anthropic (Claude).
+Unified streaming client — Groq · Gemini · OpenAI.
 
-Both providers produce the same StreamEvent types so the pipeline is
-provider-agnostic above this layer.
+No Anthropic. All providers produce identical StreamEvent types so the
+pipeline above this layer is fully provider-agnostic.
+
+Provider detection is by model-name prefix:
+  gpt-*            → OpenAI
+  o1-* / o3-*      → OpenAI
+  llama-* / mixtral-* / gemma-*  → Groq (OpenAI-compatible)
+  gemini-*         → Google Gemini (google-genai SDK)
 """
 
 from __future__ import annotations
 import asyncio
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import AsyncGenerator, Any
 from core.config import settings, MODEL_COSTS
 
 
-# ── Event model ──────────────────────────────────────────────────────────────
+# ── Event model ───────────────────────────────────────────────────────────────
 
 @dataclass
 class StreamEvent:
-    type: str          # text | thinking | tool_start | tool_delta | tool_done | done | error | system
+    type: str          # text | tool_start | tool_delta | tool_done | done | error | system
     content: str = ""
     tool_name: str | None = None
     tool_input: dict | None = None
@@ -29,139 +35,24 @@ class StreamEvent:
         return f"data: {json.dumps(self.__dict__, default=str)}\n\n"
 
 
-# ── Anthropic streaming ───────────────────────────────────────────────────────
+# ── OpenAI-compatible streaming (GPT + Groq) ─────────────────────────────────
 
-async def _anthropic_stream(
+async def _openai_compatible_stream(
     messages: list[dict],
     system: str,
     model: str,
     max_tokens: int,
     tools: list[dict] | None,
     temperature: float,
-) -> AsyncGenerator[StreamEvent, None]:
-    from anthropic import AsyncAnthropic, APIStatusError
-
-    client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-    # Inject cache_control on system prompt — saves ~70% cost on repeated calls
-    system_blocks = [
-        {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
-    ]
-
-    # Also cache the first large user turn if it's a long document
-    cached_messages = list(messages)
-    if cached_messages and len(cached_messages[0].get("content", "")) > 2000:
-        first = cached_messages[0]
-        cached_messages[0] = {
-            "role": first["role"],
-            "content": [
-                {
-                    "type": "text",
-                    "text": first["content"] if isinstance(first["content"], str) else str(first["content"]),
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-        }
-
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "system": system_blocks,
-        "messages": cached_messages,
-        "temperature": temperature,
-        "betas": ["prompt-caching-2024-07-31"],
-    }
-    if tools:
-        # Convert unified tool format to Anthropic format
-        kwargs["tools"] = [
-            {
-                "name": t["name"],
-                "description": t["description"],
-                "input_schema": t["input_schema"],
-            }
-            for t in tools
-        ]
-
-    try:
-        async with client.messages.stream(**kwargs) as stream:
-            current_tool_name: str | None = None
-            current_tool_id: str | None = None
-
-            async for event in stream:
-                etype = event.type
-
-                if etype == "content_block_start":
-                    block = event.content_block
-                    if block.type == "tool_use":
-                        current_tool_name = block.name
-                        current_tool_id = block.id
-                        yield StreamEvent(
-                            type="tool_start",
-                            tool_name=block.name,
-                            tool_call_id=block.id,
-                        )
-                    elif block.type == "thinking":
-                        pass  # thinking block opened
-
-                elif etype == "content_block_delta":
-                    delta = event.delta
-                    if delta.type == "text_delta" and delta.text:
-                        yield StreamEvent(type="text", content=delta.text)
-                    elif delta.type == "thinking_delta" and delta.thinking:
-                        yield StreamEvent(type="thinking", content=delta.thinking)
-                    elif delta.type == "input_json_delta":
-                        yield StreamEvent(
-                            type="tool_delta",
-                            content=delta.partial_json,
-                            tool_name=current_tool_name,
-                            tool_call_id=current_tool_id,
-                        )
-
-                elif etype == "content_block_stop":
-                    if current_tool_name:
-                        yield StreamEvent(
-                            type="tool_done",
-                            tool_name=current_tool_name,
-                            tool_call_id=current_tool_id,
-                        )
-                        current_tool_name = None
-                        current_tool_id = None
-
-                elif etype == "message_stop":
-                    final = stream.get_final_message()
-                    usage_data = {
-                        "input": final.usage.input_tokens,
-                        "output": final.usage.output_tokens,
-                        "cache_read": getattr(final.usage, "cache_read_input_tokens", 0),
-                        "cache_created": getattr(final.usage, "cache_creation_input_tokens", 0),
-                    }
-                    # Attach stop_reason for tool_use detection
-                    usage_data["stop_reason"] = final.stop_reason
-                    usage_data["model"] = model
-                    yield StreamEvent(type="done", usage=usage_data)
-
-    except APIStatusError as e:
-        yield StreamEvent(type="error", content=str(e), error_code=str(e.status_code))
-        raise
-
-
-# ── OpenAI streaming ──────────────────────────────────────────────────────────
-
-async def _openai_stream(
-    messages: list[dict],
-    system: str,
-    model: str,
-    max_tokens: int,
-    tools: list[dict] | None,
-    temperature: float,
+    api_key: str,
+    base_url: str | None = None,
 ) -> AsyncGenerator[StreamEvent, None]:
     from openai import AsyncOpenAI, APIStatusError
 
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
     full_messages = [{"role": "system", "content": system}] + messages
 
-    # Convert unified tool format to OpenAI format
+    # Convert unified tool schema → OpenAI function-calling format
     oai_tools = None
     if tools:
         oai_tools = [
@@ -182,8 +73,10 @@ async def _openai_stream(
         "max_tokens": max_tokens,
         "temperature": temperature,
         "stream": True,
-        "stream_options": {"include_usage": True},
     }
+    # Groq supports usage in stream; OpenAI requires stream_options
+    if base_url is None:                  # OpenAI proper
+        kwargs["stream_options"] = {"include_usage": True}
     if oai_tools:
         kwargs["tools"] = oai_tools
         kwargs["tool_choice"] = "auto"
@@ -191,12 +84,11 @@ async def _openai_stream(
     try:
         stream = await client.chat.completions.create(**kwargs)
 
-        # Per-tool accumulation: index → {name, args_buffer, id}
-        active_tools: dict[int, dict] = {}
+        active_tools: dict[int, dict] = {}   # index → {name, id, args}
 
         async for chunk in stream:
             if not chunk.choices:
-                # usage-only chunk
+                # Usage-only chunk (OpenAI stream_options)
                 if chunk.usage:
                     yield StreamEvent(
                         type="done",
@@ -220,7 +112,7 @@ async def _openai_stream(
                     if idx not in active_tools:
                         active_tools[idx] = {
                             "name": tc.function.name or "",
-                            "id": tc.id or "",
+                            "id": tc.id or f"call_{idx}",
                             "args": "",
                         }
                         if tc.function.name:
@@ -242,7 +134,7 @@ async def _openai_stream(
                             )
 
             if finish == "tool_calls":
-                for idx, tool in active_tools.items():
+                for tool in active_tools.values():
                     try:
                         parsed = json.loads(tool["args"]) if tool["args"] else {}
                     except json.JSONDecodeError:
@@ -255,50 +147,116 @@ async def _openai_stream(
                     )
                 active_tools.clear()
 
-            elif finish == "stop":
-                # usage comes in the next chunk (stream_options)
-                pass
+            elif finish == "stop" and base_url is not None:
+                # Groq: no usage chunk, emit done here
+                yield StreamEvent(type="done", usage={"model": model})
 
     except APIStatusError as e:
         yield StreamEvent(type="error", content=str(e), error_code=str(e.status_code))
         raise
 
 
-# ── Groq fallback (OpenAI-compatible, no tools) ───────────────────────────────
+# ── Gemini streaming (google-genai SDK) ───────────────────────────────────────
 
-async def _groq_stream(
+async def _gemini_stream(
     messages: list[dict],
     system: str,
     model: str,
     max_tokens: int,
+    tools: list[dict] | None,
     temperature: float,
 ) -> AsyncGenerator[StreamEvent, None]:
-    from openai import AsyncOpenAI, APIStatusError
+    try:
+        from google import genai as _gai
+        from google.genai import types as _gt
+    except ImportError:
+        raise RuntimeError(
+            "google-genai not installed. Run: pip install google-genai"
+        )
 
-    client = AsyncOpenAI(
-        api_key=settings.GROQ_API_KEY,
-        base_url="https://api.groq.com/openai/v1",
+    if not settings.GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+
+    client = _gai.Client(api_key=settings.GEMINI_API_KEY)
+
+    # Build contents list in Gemini format
+    contents: list = []
+    for m in messages:
+        role = "user" if m["role"] == "user" else "model"
+        text = m["content"] if isinstance(m["content"], str) else str(m["content"])
+        contents.append(_gt.Content(role=role, parts=[_gt.Part(text=text)]))
+
+    # Build tool declarations if any
+    genai_tools = None
+    if tools:
+        declarations = [
+            _gt.FunctionDeclaration(
+                name=t["name"],
+                description=t["description"],
+                parameters=t["input_schema"],
+            )
+            for t in tools
+        ]
+        genai_tools = [_gt.Tool(function_declarations=declarations)]
+
+    config = _gt.GenerateContentConfig(
+        system_instruction=system,
+        max_output_tokens=max_tokens,
+        temperature=temperature,
+        **({"tools": genai_tools} if genai_tools else {}),
     )
-    full_messages = [{"role": "system", "content": system}] + messages
 
     try:
-        stream = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=full_messages,
-            max_tokens=min(max_tokens, 8192),
-            temperature=temperature,
-            stream=True,
-        )
-        async for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield StreamEvent(type="text", content=chunk.choices[0].delta.content)
-        yield StreamEvent(type="done", usage={"model": "llama-3.3-70b-versatile"})
-    except APIStatusError as e:
-        yield StreamEvent(type="error", content=str(e), error_code=str(e.status_code))
+        # google-genai async streaming via context manager
+        async with client.aio.models.stream(
+            model=model,
+            contents=contents,
+            config=config,
+        ) as stream_:
+            async for chunk in stream_:
+                # Text token
+                if chunk.text:
+                    yield StreamEvent(type="text", content=chunk.text)
+
+                # Function call (tool use)
+                if chunk.candidates:
+                    for cand in chunk.candidates:
+                        for part in (cand.content.parts or []):
+                            if hasattr(part, "function_call") and part.function_call:
+                                fc = part.function_call
+                                call_id = fc.name  # Gemini has no UUID per call
+                                yield StreamEvent(
+                                    type="tool_start",
+                                    tool_name=fc.name,
+                                    tool_call_id=call_id,
+                                )
+                                yield StreamEvent(
+                                    type="tool_done",
+                                    tool_name=fc.name,
+                                    tool_call_id=call_id,
+                                    tool_input=dict(fc.args) if fc.args else {},
+                                )
+
+        # Emit usage (available after stream closes)
+        usage_meta = getattr(stream_, "usage_metadata", None)
+        if usage_meta:
+            yield StreamEvent(
+                type="done",
+                usage={
+                    "input":  getattr(usage_meta, "prompt_token_count",     0),
+                    "output": getattr(usage_meta, "candidates_token_count", 0),
+                    "model":  model,
+                },
+            )
+        else:
+            yield StreamEvent(type="done", usage={"model": model})
+
+    except Exception as e:
+        yield StreamEvent(type="error", content=str(e))
         raise
 
 
-# ── Public streaming API ───────────────────────────────────────────────────────
+# ── Public API ────────────────────────────────────────────────────────────────
 
 async def stream(
     messages: list[dict],
@@ -308,32 +266,44 @@ async def stream(
     tools: list[dict] | None = None,
     temperature: float = 0.7,
 ) -> AsyncGenerator[StreamEvent, None]:
-    """
-    Route to the correct provider based on model name.
-    Falls back through providers if primary fails.
-    """
+    """Route to the correct provider; auto-fall-back on failure."""
     provider = _get_provider(model)
 
     try:
-        if provider == "anthropic":
-            async for evt in _anthropic_stream(messages, system, model, max_tokens, tools, temperature):
+        if provider == "openai":
+            async for evt in _openai_compatible_stream(
+                messages, system, model, max_tokens, tools, temperature,
+                api_key=settings.OPENAI_API_KEY,
+            ):
                 yield evt
-        elif provider == "openai":
-            async for evt in _openai_stream(messages, system, model, max_tokens, tools, temperature):
-                yield evt
+
         elif provider == "groq":
-            async for evt in _groq_stream(messages, system, model, max_tokens, temperature):
+            # Groq: tool support only on llama models
+            groq_tools = tools if _groq_supports_tools(model) else None
+            async for evt in _openai_compatible_stream(
+                messages, system, model,
+                min(max_tokens, 8192),  # Groq cap
+                groq_tools, temperature,
+                api_key=settings.GROQ_API_KEY,
+                base_url="https://api.groq.com/openai/v1",
+            ):
                 yield evt
+
+        elif provider == "gemini":
+            async for evt in _gemini_stream(
+                messages, system, model, max_tokens, tools, temperature
+            ):
+                yield evt
+
         else:
-            raise ValueError(f"Unknown model: {model}")
+            raise ValueError(f"No provider found for model: {model}")
 
     except Exception as exc:
-        # Try fallback
-        fallback = _get_fallback(model)
+        fallback = _FALLBACK_CHAIN.get(model)
         if fallback and fallback != model:
             yield StreamEvent(
                 type="system",
-                content=f"Primary model unavailable, switching to {fallback}...",
+                content=f"Switching to fallback model: {fallback}",
             )
             async for evt in stream(messages, system, fallback, max_tokens, tools, temperature):
                 yield evt
@@ -349,45 +319,51 @@ async def complete(
     max_tokens: int = 2048,
     temperature: float = 0.3,
 ) -> str:
-    """Non-streaming completion for internal tasks (title gen, summarization)."""
-    result = []
+    """Non-streaming completion for internal tasks (title gen, summarisation)."""
+    parts: list[str] = []
     async for evt in stream(messages, system, model, max_tokens, None, temperature):
         if evt.type == "text":
-            result.append(evt.content)
-    return "".join(result)
+            parts.append(evt.content)
+    return "".join(parts)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_provider(model: str) -> str:
-    if model.startswith("claude"):
-        return "anthropic"
-    if model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
+    if model.startswith(("gpt-", "o1-", "o3-")):
         return "openai"
-    if model.startswith("llama") or model.startswith("mixtral"):
+    if model.startswith(("llama", "mixtral", "gemma")):
         return "groq"
     if model.startswith("gemini"):
         return "gemini"
-    return "anthropic"
+    # Default to Groq (free) if unknown
+    return "groq"
 
 
+def _groq_supports_tools(model: str) -> bool:
+    """Groq tool-calling works on llama-3.x models only."""
+    return model.startswith("llama")
+
+
+# Priority: free/fast first, then fallback up quality ladder
 _FALLBACK_CHAIN: dict[str, str] = {
-    "claude-opus-4-7":           "claude-sonnet-4-6",
-    "claude-sonnet-4-6":         "claude-haiku-4-5-20251001",
-    "claude-haiku-4-5-20251001": "gpt-4o-mini",
-    "gpt-4o":                    "gpt-4o-mini",
-    "gpt-4o-mini":               "claude-haiku-4-5-20251001",
+    # OpenAI
+    "gpt-4o":                   "gemini-2.0-flash",
+    "gpt-4o-mini":              "gemini-2.0-flash",
+    # Gemini
+    "gemini-1.5-pro":           "gemini-2.0-flash",
+    "gemini-2.0-flash":         "llama-3.3-70b-versatile",
+    "gemini-1.5-flash":         "llama-3.3-70b-versatile",
+    # Groq
+    "llama-3.3-70b-versatile":  "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768":       "llama-3.3-70b-versatile",
+    "gemma2-9b-it":             "llama-3.1-8b-instant",
+    "llama-3.1-8b-instant":     "gemini-2.0-flash",
 }
 
 
-def _get_fallback(model: str) -> str | None:
-    return _FALLBACK_CHAIN.get(model)
-
-
 def estimate_cost(model: str, input_tokens: int, output_tokens: int, cache_read: int = 0) -> float:
-    costs = MODEL_COSTS.get(model, {"input": 3.0, "output": 15.0})
-    total = (input_tokens / 1_000_000) * costs["input"]
+    costs = MODEL_COSTS.get(model, {"input": 0.0, "output": 0.0})
+    total = (input_tokens  / 1_000_000) * costs["input"]
     total += (output_tokens / 1_000_000) * costs["output"]
-    if cache_read and "cache_read" in costs:
-        total += (cache_read / 1_000_000) * costs["cache_read"]
     return round(total, 6)

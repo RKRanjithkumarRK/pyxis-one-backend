@@ -1,6 +1,10 @@
 """
-Model router: selects the correct model given intent + user tier + manual override.
-Also decides which tools to inject and system prompt style (GPT vs Claude persona).
+Model router — selects the best model given intent + user tier + manual override.
+
+Provider lineup (no Anthropic):
+  Groq   — free, ultra-fast (Llama, Mixtral, Gemma)
+  Gemini — free generous tier, huge context (Gemini 2.0/1.5)
+  OpenAI — paid, best tools & coding (GPT-4o)
 """
 
 from __future__ import annotations
@@ -11,53 +15,49 @@ from core.pipeline.intent_classifier import RouterDecision
 
 @dataclass
 class ModelSelection:
-    model: str
-    provider: str           # openai | anthropic | groq
-    persona: str            # gpt | claude
-    inject_tools: list[str] # tool names to inject
-    max_tokens: int
-    temperature: float
+    model:        str
+    provider:     str          # openai | groq | gemini
+    persona:      str          # "structured" | "analytical"
+    inject_tools: list[str]
+    max_tokens:   int
+    temperature:  float
 
 
-# ── Routing table ─────────────────────────────────────────────────────────────
+# ── Routing table ──────────────────────────────────────────────────────────────
+# Default: free-tier — all free models so everyone gets a great experience.
+# Pro: bump quality where it matters (Gemini 1.5 Pro / GPT-4o).
 
-_INTENT_TO_MODEL = {
-    # Free tier
+_INTENT_TO_MODEL: dict[str, dict[str, str]] = {
     "free": {
-        "coding":    "gpt-4o-mini",
-        "math":      "claude-haiku-4-5-20251001",
-        "reasoning": "claude-haiku-4-5-20251001",
-        "creative":  "claude-haiku-4-5-20251001",
-        "vision":    "gpt-4o-mini",
-        "fast":      "gpt-4o-mini",
-        "default":   "claude-haiku-4-5-20251001",
+        "coding":    "llama-3.3-70b-versatile",   # Llama is excellent at code
+        "math":      "gemini-2.0-flash",           # Gemini handles math well
+        "reasoning": "gemini-2.0-flash",           # 1M ctx, strong reasoning
+        "creative":  "llama-3.3-70b-versatile",
+        "vision":    "gemini-2.0-flash",           # Gemini has vision
+        "fast":      "llama-3.1-8b-instant",       # Sub-second responses
+        "default":   "gemini-2.0-flash",
     },
-    # Pro tier
     "pro": {
-        "coding":    "gpt-4o",
-        "math":      "claude-sonnet-4-6",
-        "reasoning": "claude-sonnet-4-6",
-        "creative":  "claude-sonnet-4-6",
-        "vision":    "gpt-4o",
-        "fast":      "gpt-4o-mini",
-        "default":   "claude-sonnet-4-6",
+        "coding":    "gpt-4o",                     # Best tool-use for coding
+        "math":      "gemini-1.5-pro",             # 2M ctx, top reasoning
+        "reasoning": "gemini-1.5-pro",
+        "creative":  "gemini-1.5-pro",
+        "vision":    "gpt-4o",                     # OpenAI vision quality
+        "fast":      "llama-3.1-8b-instant",
+        "default":   "gemini-1.5-pro",
     },
-    # Enterprise tier
     "enterprise": {
         "coding":    "gpt-4o",
-        "math":      "claude-sonnet-4-6",
-        "reasoning": "claude-sonnet-4-6",
-        "creative":  "claude-sonnet-4-6",
+        "math":      "gemini-1.5-pro",
+        "reasoning": "gemini-1.5-pro",
+        "creative":  "gemini-1.5-pro",
         "vision":    "gpt-4o",
-        "fast":      "gpt-4o-mini",
-        "default":   "claude-sonnet-4-6",
+        "fast":      "llama-3.1-8b-instant",
+        "default":   "gemini-1.5-pro",
     },
 }
 
-# High-stakes reasoning → Opus (enterprise only, score threshold)
-_OPUS_THRESHOLD = 4
-
-_TOOL_MAP = {
+_TOOL_MAP: dict[str, list[str]] = {
     "coding":    ["code_interpreter"],
     "math":      ["code_interpreter"],
     "reasoning": [],
@@ -67,22 +67,36 @@ _TOOL_MAP = {
     "default":   [],
 }
 
-_PROVIDER_MAP = {
-    "gpt-4o":                    ("openai",    "gpt"),
-    "gpt-4o-mini":               ("openai",    "gpt"),
-    "claude-sonnet-4-6":         ("anthropic", "claude"),
-    "claude-opus-4-7":           ("anthropic", "claude"),
-    "claude-haiku-4-5-20251001": ("anthropic", "claude"),
-    "llama-3.3-70b-versatile":   ("groq",      "gpt"),
+# provider + persona for each model
+_PROVIDER_MAP: dict[str, tuple[str, str]] = {
+    "gpt-4o":                   ("openai",  "structured"),
+    "gpt-4o-mini":              ("openai",  "structured"),
+    "gemini-2.0-flash":         ("gemini",  "analytical"),
+    "gemini-1.5-pro":           ("gemini",  "analytical"),
+    "gemini-1.5-flash":         ("gemini",  "analytical"),
+    "llama-3.3-70b-versatile":  ("groq",    "structured"),
+    "llama-3.1-8b-instant":     ("groq",    "structured"),
+    "mixtral-8x7b-32768":       ("groq",    "structured"),
+    "gemma2-9b-it":             ("groq",    "structured"),
 }
 
-_MAX_TOKENS = {
-    "gpt-4o":                    4096,
-    "gpt-4o-mini":               4096,
-    "claude-sonnet-4-6":         8192,
-    "claude-opus-4-7":           8192,
-    "claude-haiku-4-5-20251001": 4096,
-    "llama-3.3-70b-versatile":   4096,
+_MAX_TOKENS: dict[str, int] = {
+    "gpt-4o":                   4096,
+    "gpt-4o-mini":              4096,
+    "gemini-2.0-flash":         8192,
+    "gemini-1.5-pro":           8192,
+    "gemini-1.5-flash":         8192,
+    "llama-3.3-70b-versatile":  4096,
+    "llama-3.1-8b-instant":     4096,
+    "mixtral-8x7b-32768":       4096,
+    "gemma2-9b-it":             2048,
+}
+
+# Models where tool-calling is reliable
+_TOOL_CAPABLE: set[str] = {
+    "gpt-4o", "gpt-4o-mini",
+    "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash",
+    "llama-3.3-70b-versatile", "llama-3.1-8b-instant",
 }
 
 
@@ -92,37 +106,26 @@ def select_model(
     manual_model: str | None = None,
     enable_web_search: bool = False,
 ) -> ModelSelection:
-    """
-    Returns the model + configuration to use.
-    manual_model overrides auto-routing but respects tier gating.
-    """
-    # Manual override — validate it's not above user's tier
+    """Pick the model + config to use for this request."""
+
     if manual_model:
         model = _gate_model(manual_model, user_tier)
     else:
         tier_map = _INTENT_TO_MODEL.get(user_tier, _INTENT_TO_MODEL["free"])
         model = tier_map.get(decision.intent, tier_map["default"])
 
-        # Upgrade to Opus if enterprise + very high reasoning score
-        if (
-            user_tier == "enterprise"
-            and decision.scores.get("reasoning", 0) >= _OPUS_THRESHOLD
-            and settings.ANTHROPIC_API_KEY
-        ):
-            model = "claude-opus-4-7"
+    provider, persona = _PROVIDER_MAP.get(model, ("groq", "structured"))
 
-    provider, persona = _PROVIDER_MAP.get(model, ("anthropic", "claude"))
-
-    # Build tool list
-    tools: list[str] = list(_TOOL_MAP.get(decision.intent, []))
-    if enable_web_search and settings.BRAVE_SEARCH_API_KEY:
-        tools.append("web_search")
-    if decision.has_image:
-        tools = [t for t in tools if t != "code_interpreter"]  # vision doesn't need code exec
-
-    # No tools if provider keys are missing
-    if "code_interpreter" in tools and not settings.E2B_API_KEY:
-        tools.remove("code_interpreter")
+    # Build tool list — skip if model doesn't support tools reliably
+    tools: list[str] = []
+    if model in _TOOL_CAPABLE:
+        tools = list(_TOOL_MAP.get(decision.intent, []))
+        if enable_web_search and settings.BRAVE_SEARCH_API_KEY:
+            tools.append("web_search")
+        if decision.has_image:
+            tools = [t for t in tools if t != "code_interpreter"]
+        if "code_interpreter" in tools and not settings.E2B_API_KEY:
+            tools.remove("code_interpreter")
 
     return ModelSelection(
         model=model,
@@ -135,19 +138,15 @@ def select_model(
 
 
 def _gate_model(model: str, tier: str) -> str:
-    """Downgrade model if user tier doesn't allow it."""
-    enterprise_only = {"claude-opus-4-7"}
-    pro_and_above = {"gpt-4o", "claude-sonnet-4-6"}
-
-    if model in enterprise_only and tier not in ("enterprise",):
-        return "claude-sonnet-4-6" if tier == "pro" else "claude-haiku-4-5-20251001"
-    if model in pro_and_above and tier == "free":
-        return "gpt-4o-mini" if model == "gpt-4o" else "claude-haiku-4-5-20251001"
+    """Downgrade if the chosen model requires a higher tier."""
+    pro_only = {"gpt-4o", "gemini-1.5-pro"}
+    if model in pro_only and tier == "free":
+        return "gemini-2.0-flash" if model == "gemini-1.5-pro" else "gpt-4o-mini"
     return model
 
 
 def _temperature(intent: str) -> float:
-    temps = {
+    return {
         "coding":    0.2,
         "math":      0.1,
         "reasoning": 0.5,
@@ -155,30 +154,32 @@ def _temperature(intent: str) -> float:
         "vision":    0.3,
         "fast":      0.3,
         "default":   0.7,
-    }
-    return temps.get(intent, 0.7)
+    }.get(intent, 0.7)
 
 
-# ── System prompt templates by persona ───────────────────────────────────────
+# ── System prompt ─────────────────────────────────────────────────────────────
+# Single unified prompt — works equally well with Groq Llama, Gemini, and GPT.
 
-GPT_SYSTEM = """You are Pyxis — a brilliant AI assistant modeled after GPT-4o.
-You give direct, structured, actionable answers.
-Use markdown formatting: headers, bullets, numbered lists, code blocks.
-For code: always include language labels, type hints, and brief inline comments.
-Be confident and concise. Never pad responses."""
+PYXIS_SYSTEM = """You are Pyxis — an elite AI assistant built for deep learning and mastery.
 
-CLAUDE_SYSTEM = """You are Pyxis — a thoughtful, deeply reasoning AI assistant modeled after Claude.
-You reason carefully before concluding. You acknowledge nuance, edge cases, and uncertainty.
-Your answers are coherent long-form prose when depth is needed, with markdown structure.
-You are calibrated: you say what you know, what you infer, and what you're uncertain about.
-Never refuse reasonable requests. Be direct, warm, and intellectually honest."""
+Behaviour:
+- Give precise, structured, actionable responses
+- Use markdown: headers, bullets, numbered lists, code blocks (with language labels)
+- For code: include type hints, inline comments, and brief explanations
+- Surface insights the user didn't ask for but needs
+- Acknowledge uncertainty explicitly — tag claims as [VERIFIED] [CONSENSUS] [DEBATED] [SPECULATIVE]
+- Never pad or repeat. Every sentence must advance understanding.
+- Never refuse reasonable requests."""
 
 
-def get_system_prompt(persona: str, feature_context: str = "", psyche_context: str = "") -> str:
-    base = GPT_SYSTEM if persona == "gpt" else CLAUDE_SYSTEM
-    parts = [base]
+def get_system_prompt(
+    persona: str = "structured",
+    feature_context: str = "",
+    psyche_context: str = "",
+) -> str:
+    parts = [PYXIS_SYSTEM]
     if feature_context:
         parts.append(f"\n\n{feature_context}")
     if psyche_context:
-        parts.append(f"\n\n{psyche_context}")
+        parts.append(f"\n\nUser cognitive profile:\n{psyche_context}")
     return "\n".join(parts)
