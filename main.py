@@ -1,16 +1,20 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from core.config import settings
 from core.database import create_all_tables, AsyncSessionLocal
 from core.models import Session as PyxisSession
+from core.middleware.rate_limiter import RateLimitError
 from sqlalchemy import select
 import uvicorn
 
 from routers import chat, trident, assessment, parliament, features, voice
 from routers import vault as vault_router
 from routers import analytics
+from routers import conversations as conversations_router
+from routers import files as files_router
 
 scheduler = AsyncIOScheduler()
 
@@ -21,7 +25,6 @@ async def _scheduled_curriculum_rewrite() -> None:
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(PyxisSession).limit(50))
             sessions = result.scalars().all()
-
         for session in sessions:
             try:
                 await curriculum_engine.rewrite_curriculum(session.id)
@@ -48,21 +51,39 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Pyxis One Backend",
-    description="Advanced AI learning companion backend",
-    version="1.0.0",
+    description="Advanced AI product backend — ChatGPT + Claude parity",
+    version="2.0.0",
     lifespan=lifespan,
 )
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
 
 _origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
+
+# ── Global exception handlers ─────────────────────────────────────────────────
+
+@app.exception_handler(RateLimitError)
+async def rate_limit_handler(request: Request, exc: RateLimitError):
+    return JSONResponse(
+        status_code=429,
+        content={"error": "rate_limit", "retry_after": exc.retry_after},
+        headers={"Retry-After": str(exc.retry_after)},
+    )
+
+
+# ── Routers ───────────────────────────────────────────────────────────────────
+
 app.include_router(chat.router, prefix="/api")
+app.include_router(conversations_router.router, prefix="/api")
+app.include_router(files_router.router, prefix="/api")
 app.include_router(trident.router, prefix="/api")
 app.include_router(assessment.router, prefix="/api")
 app.include_router(parliament.router, prefix="/api")
@@ -72,28 +93,35 @@ app.include_router(vault_router.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 
 
+# ── Health ────────────────────────────────────────────────────────────────────
+
 @app.get("/health")
 async def health():
-    key = settings.ANTHROPIC_API_KEY
-    key_ok = key and not any(p in key.lower() for p in ["placeholder", "test", "your_key"])
+    from core.middleware.circuit_breaker import status as cb_status
+    key_anthropic = bool(settings.ANTHROPIC_API_KEY)
+    key_openai = bool(settings.OPENAI_API_KEY)
+    key_groq = bool(settings.GROQ_API_KEY)
     return {
         "status": "ok",
         "service": "pyxis-one-backend",
-        "api_key_configured": key_ok,
+        "version": "2.0.0",
+        "providers": {
+            "anthropic": key_anthropic,
+            "openai": key_openai,
+            "groq": key_groq,
+            "brave_search": bool(settings.BRAVE_SEARCH_API_KEY),
+            "e2b": bool(settings.E2B_API_KEY),
+        },
+        "circuit_breakers": cb_status(),
     }
 
 
 @app.get("/")
 async def root():
     return {
-        "message": "Pyxis One Backend — Active and Online",
-        "version": "1.0.0",
-        "engines": [
-            "psyche", "forge", "curriculum", "oracle", "nemesis",
-            "helix", "tides", "gravity", "dark_knowledge", "mirror",
-            "civilization", "symphony", "vault", "blind_spots",
-            "precognition", "shadow_self",
-        ],
+        "message": "Pyxis One Backend — v2.0 Production",
+        "docs": "/docs",
+        "health": "/health",
     }
 
 

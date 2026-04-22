@@ -321,6 +321,54 @@ class ChatRequest(BaseModel):
     message: str
     feature_mode: Optional[str] = "standard"
     student_name: Optional[str] = None
+    # New pipeline fields
+    conversation_id: Optional[str] = None
+    model: Optional[str] = None               # manual model override
+    branch_index: Optional[int] = 0
+    regeneration_attempt: Optional[int] = 0   # 0=first, 1=regen, 2=regen again...
+    enable_web_search: Optional[bool] = False
+    file_ids: Optional[list[str]] = None      # attached file IDs
+
+
+# ── Conversations ─────────────────────────────────────────────────────────────
+
+class ConversationResponse(BaseModel):
+    id: str
+    session_id: str
+    title: Optional[str]
+    model: str
+    feature_mode: Optional[str]
+    pinned: bool
+    created_at: str
+    updated_at: str
+
+
+class ConversationMessageResponse(BaseModel):
+    id: str
+    conversation_id: str
+    parent_id: Optional[str]
+    branch_index: int
+    role: str
+    content: str
+    model: Optional[str]
+    finish_reason: Optional[str]
+    usage: Optional[dict]
+    feature_mode: Optional[str]
+    created_at: str
+
+
+# ── Files ─────────────────────────────────────────────────────────────────────
+
+class FileUploadResponse(BaseModel):
+    file_id: str
+    filename: str
+    content_type: str
+    file_size: str
+    extension: str
+    page_count: Optional[int]
+    truncated: bool
+    has_image: bool
+    preview: str
 
 
 # ── Trident ───────────────────────────────────────────────────────────────────
