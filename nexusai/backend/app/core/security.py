@@ -124,3 +124,10 @@ async def require_bearer(
     if credentials is None:
         raise HTTPException(status_code=403, detail="Not authenticated")
     return credentials
+
+
+async def optional_bearer(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+) -> HTTPAuthorizationCredentials | None:
+    """Dependency that returns credentials if present, None otherwise."""
+    return credentials

@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
-from app.core.database import engine
+from app.core.database import engine, AsyncSessionLocal
 from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router
 
@@ -31,6 +31,12 @@ async def lifespan(app: FastAPI):
     setup_telemetry()
     logger.info("NexusAI backend starting — environment=%s", settings.ENVIRONMENT)
     logger.info("Available AI providers: %s", settings.available_providers)
+
+    from app.services.agents.loader import load_builtin_agents
+    async with AsyncSessionLocal() as db:
+        count = await load_builtin_agents(db)
+        logger.info("Built-in agents ready: %d", count)
+
     yield
     logger.info("NexusAI backend shutting down")
     await engine.dispose()

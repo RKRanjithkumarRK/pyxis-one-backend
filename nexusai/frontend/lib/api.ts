@@ -113,3 +113,59 @@ export const healthApi = {
   check: () => api.get<HealthResponse>("/api/v1/health"),
   ready: () => api.get("/api/v1/health/ready"),
 };
+
+import type {
+  Agent,
+  AgentListResponse,
+  AgentVersion,
+  CreateAgentPayload,
+  UpdateAgentPayload,
+} from "./api-types";
+
+export const agentsApi = {
+  list: (
+    params: {
+      category?: string;
+      search?: string;
+      sort?: string;
+      page?: number;
+      page_size?: number;
+    },
+    token?: string,
+  ) => {
+    const q = new URLSearchParams();
+    if (params.category) q.set("category", params.category);
+    if (params.search) q.set("search", params.search);
+    if (params.sort) q.set("sort", params.sort);
+    if (params.page) q.set("page", String(params.page));
+    if (params.page_size) q.set("page_size", String(params.page_size));
+    const qs = q.toString();
+    return api.get<AgentListResponse>(`/api/v1/agents${qs ? `?${qs}` : ""}`, token);
+  },
+
+  mine: (token: string) => api.get<Agent[]>("/api/v1/agents/mine", token),
+
+  get: (ref: string, token?: string) =>
+    api.get<Agent>(`/api/v1/agents/${ref}`, token),
+
+  create: (payload: CreateAgentPayload, token: string) =>
+    api.post<Agent>("/api/v1/agents", payload, token),
+
+  update: (id: string, payload: UpdateAgentPayload, token: string) =>
+    api.patch<Agent>(`/api/v1/agents/${id}`, payload, token),
+
+  delete: (id: string, token: string) =>
+    api.delete<void>(`/api/v1/agents/${id}`, token),
+
+  publish: (id: string, isPublic: boolean, token: string) =>
+    api.post<Agent>(`/api/v1/agents/${id}/publish?public=${isPublic}`, {}, token),
+
+  versions: (id: string, token: string) =>
+    api.get<AgentVersion[]>(`/api/v1/agents/${id}/versions`, token),
+
+  restore: (id: string, version: number, token: string) =>
+    api.post<Agent>(`/api/v1/agents/${id}/restore/${version}`, {}, token),
+
+  rate: (id: string, rating: number, token: string) =>
+    api.post<Agent>(`/api/v1/agents/${id}/rate`, { rating }, token),
+};
