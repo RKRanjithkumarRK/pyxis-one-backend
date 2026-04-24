@@ -5,7 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import decode_token, get_current_user_or_guest, bearer
+from app.core.security import decode_token, get_current_user_or_guest, require_bearer
 from app.repositories.user import UserRepository
 from app.schemas.auth import (
     AuthResponse,
@@ -44,7 +44,7 @@ async def login(
 
 @router.post("/logout", status_code=204)
 async def logout(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
 ):
     payload = decode_token(credentials.credentials)
     await AuthService.logout(jti=payload.get("jti", ""))
@@ -106,7 +106,7 @@ async def create_guest(
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     payload = decode_token(credentials.credentials)
@@ -119,7 +119,7 @@ async def get_me(
 @router.patch("/me", response_model=UserResponse)
 async def update_me(
     body: UpdateProfileRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     payload = decode_token(credentials.credentials)

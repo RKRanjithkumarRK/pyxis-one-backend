@@ -211,9 +211,12 @@ async def _record_cost(user_id: str, route: ModelRoute, usage: dict) -> None:
         (usage.get("prompt_tokens", 0) / 1000) * route.cost_in_per_1k
         + (usage.get("completion_tokens", 0) / 1000) * route.cost_out_per_1k
     )
-    key = f"cost:user:{user_id}:daily"
-    await redis_client.incrbyfloat(key, cost)
-    await redis_client.expire(key, 86400 * 40)
+    daily_key = f"cost:user:{user_id}:daily"
+    monthly_key = f"cost:user:{user_id}:monthly"
+    await redis_client.incrbyfloat(daily_key, cost)
+    await redis_client.expire(daily_key, 86400 * 2)   # rolls over after 2 days
+    await redis_client.incrbyfloat(monthly_key, cost)
+    await redis_client.expire(monthly_key, 86400 * 40)  # covers ~1 billing cycle
 
 
 async def embed(texts: list[str], model: str = "text-embedding-3-large") -> list[list[float]]:

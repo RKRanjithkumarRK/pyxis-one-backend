@@ -7,45 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.core.security import bearer, decode_token
+from app.core.security import require_bearer, decode_token
 from app.repositories.conversation import ConversationRepository
 from app.repositories.message import MessageRepository
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
-
-
-class ConversationResponse(BaseModel):
-    id: str
-    title: str
-    model_id: str
-    active_branch_id: str | None
-    project_id: str | None
-    agent_id: str | None
-    pinned_at: str | None
-    archived_at: str | None
-    is_shared: bool
-    memory_enabled: bool
-    web_search_enabled: bool
-    created_at: str
-    updated_at: str
-
-    model_config = {"from_attributes": True}
-
-
-class MessageResponse(BaseModel):
-    id: str
-    branch_id: str
-    sequence: int
-    role: str
-    content: str
-    model_id: str | None
-    usage: dict | None
-    citations: list | None
-    attachments: list | None
-    feedback: str | None
-    created_at: str
-
-    model_config = {"from_attributes": True}
 
 
 class UpdateConversationRequest(BaseModel):
@@ -103,10 +69,24 @@ def _msg_dict(msg) -> dict:
     }
 
 
+# ── /search must be registered before /{conversation_id} ──────────────────────
+
+@router.get("/search")
+async def search_conversations(
+    q: str = Query(..., min_length=1),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
+    db: AsyncSession = Depends(get_db),
+):
+    tp = decode_token(credentials.credentials)
+    user_id = uuid.UUID(tp["sub"])
+    convs = await ConversationRepository.search(db, user_id, q)
+    return {"conversations": [_conv_dict(c) for c in convs]}
+
+
 @router.get("")
 async def list_conversations(
     include_archived: bool = Query(False),
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     tp = decode_token(credentials.credentials)
@@ -120,7 +100,7 @@ async def list_conversations(
 @router.post("", status_code=201)
 async def create_conversation(
     payload: dict = {},
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     tp = decode_token(credentials.credentials)
@@ -138,7 +118,7 @@ async def create_conversation(
 @router.get("/{conversation_id}")
 async def get_conversation(
     conversation_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     tp = decode_token(credentials.credentials)
@@ -153,7 +133,7 @@ async def get_conversation(
 async def update_conversation(
     conversation_id: str,
     body: UpdateConversationRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     tp = decode_token(credentials.credentials)
@@ -187,7 +167,7 @@ async def update_conversation(
 @router.delete("/{conversation_id}", status_code=204)
 async def delete_conversation(
     conversation_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     tp = decode_token(credentials.credentials)
@@ -200,7 +180,7 @@ async def delete_conversation(
 @router.get("/{conversation_id}/messages")
 async def get_messages(
     conversation_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     tp = decode_token(credentials.credentials)
@@ -210,9 +190,7 @@ async def get_messages(
         raise HTTPException(status_code=404, detail="Conversation not found")
     if not conv.active_branch_id:
         return {"messages": []}
-    msgs = await MessageRepository.list_branch(
-        db, conv.id, conv.active_branch_id
-    )
+    msgs = await MessageRepository.list_branch(db, conv.id, conv.active_branch_id)
     return {"messages": [_msg_dict(m) for m in msgs]}
 
 
@@ -221,7 +199,7 @@ async def edit_message(
     conversation_id: str,
     message_id: str,
     body: EditMessageRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.conversation.service import ConversationService
@@ -235,15 +213,3 @@ async def edit_message(
         user_id,
     )
     return {"branch_id": str(new_branch_id)}
-
-
-@router.get("/search")
-async def search_conversations(
-    q: str = Query(..., min_length=1),
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
-    db: AsyncSession = Depends(get_db),
-):
-    tp = decode_token(credentials.credentials)
-    user_id = uuid.UUID(tp["sub"])
-    convs = await ConversationRepository.search(db, user_id, q)
-    return {"conversations": [_conv_dict(c) for c in convs]}

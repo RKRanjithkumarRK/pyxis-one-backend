@@ -8,7 +8,7 @@ from httpx import AsyncClient
 async def test_models_endpoint(client: AsyncClient):
     """Models list requires no auth; returns model definitions."""
     from unittest.mock import AsyncMock, patch
-    with patch("app.services.llm.router.get_model_latency", new_callable=AsyncMock, return_value=None):
+    with patch("app.api.v1.chat.get_model_latency", new_callable=AsyncMock, return_value=None):
         resp = await client.get("/api/v1/chat/models")
     assert resp.status_code == 200
     data = resp.json()

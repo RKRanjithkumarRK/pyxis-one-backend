@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import bearer, decode_token
+from app.core.security import require_bearer, decode_token
 from app.services.llm.router import stream_chat, available_models, get_model_latency, ROUTES
 from app.services.conversation.service import ConversationService
 from app.repositories.conversation import ConversationRepository
@@ -34,7 +34,7 @@ async def list_models():
 async def chat_stream(
     payload: dict,
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     token_payload = decode_token(credentials.credentials)
@@ -177,7 +177,7 @@ async def chat_stream(
 @router.post("/compare")
 async def chat_compare(
     payload: dict,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     """Stream 2-3 models simultaneously in multiplexed SSE columns."""
@@ -227,7 +227,7 @@ async def chat_compare(
 async def submit_feedback(
     message_id: str,
     payload: dict,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     feedback = payload.get("feedback")

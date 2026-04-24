@@ -115,3 +115,12 @@ async def get_current_user(
     if credentials is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     return await get_current_user_or_guest(credentials)
+
+
+async def require_bearer(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+) -> HTTPAuthorizationCredentials:
+    """Dependency that enforces a Bearer token and returns 403 if absent."""
+    if credentials is None:
+        raise HTTPException(status_code=403, detail="Not authenticated")
+    return credentials

@@ -98,9 +98,10 @@ export function Sidebar({ onNewChat }: Props) {
       {/* Nav links */}
       <div className="px-2 space-y-0.5 pb-2">
         {[
-          { label: "Agents", href: "/agents", icon: "🤖" },
-          { label: "Research", href: "/research", icon: "🔬" },
-          { label: "Image Studio", href: "/image", icon: "🎨" },
+          { label: "Compare",      href: "/chat/compare", icon: "⚡" },
+          { label: "Agents",       href: "/agents",       icon: "🤖" },
+          { label: "Research",     href: "/research",     icon: "🔬" },
+          { label: "Image Studio", href: "/image",        icon: "🎨" },
         ].map((item) => (
           <Link
             key={item.href}
