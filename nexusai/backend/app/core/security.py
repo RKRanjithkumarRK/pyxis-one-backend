@@ -76,10 +76,9 @@ class _GuestUser:
 
 async def get_current_user_or_guest(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: "AsyncSession | None" = None,  # injected by router-level override; None for health
 ) -> Any:
-    """Returns the authenticated user, or a GuestUser for unauthenticated requests.
-    Full DB lookup is wired in Phase 2; this stub handles the dependency for Phase 1.
-    """
+    """Returns authenticated User row (or GuestUser for bearer-less requests)."""
     if credentials is None:
         return _GuestUser()
 
@@ -88,13 +87,31 @@ async def get_current_user_or_guest(
     if await is_revoked(payload.get("jti", "")):
         raise HTTPException(status_code=401, detail="Token has been revoked")
 
-    # Phase 2 will do: user = await UserRepository.get(db, uuid.UUID(payload["sub"]))
-    # For now return a minimal object so chat/health endpoints don't break
-    class _AuthUser:
+    # Inline import to avoid circular dependency at module load time
+    if db is not None:
+        from app.repositories.user import UserRepository
+        import uuid as _uuid
+        user = await UserRepository.get_by_id(db, _uuid.UUID(payload["sub"]))
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+
+    # Fallback for endpoints that don't inject db (e.g. health check)
+    class _TokenUser:
         id = payload["sub"]
         email = payload.get("email")
         plan = payload.get("plan", "free")
         is_admin = payload.get("is_admin", False)
         memory_enabled = True
+        is_guest = payload.get("is_guest", False)
 
-    return _AuthUser()
+    return _TokenUser()
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+) -> Any:
+    """Strict version — returns 401 if no token provided."""
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return await get_current_user_or_guest(credentials)
