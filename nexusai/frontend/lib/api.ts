@@ -122,6 +122,58 @@ import type {
   UpdateAgentPayload,
 } from "./api-types";
 
+import type { ResearchReport, ResearchDepth } from "./api-types";
+
+export const researchApi = {
+  start: (query: string, depth: ResearchDepth, token: string) =>
+    api.post<ResearchReport>("/api/v1/research", { query, depth }, token),
+
+  list: (token: string) => api.get<ResearchReport[]>("/api/v1/research", token),
+
+  get: (id: string, token: string) => api.get<ResearchReport>(`/api/v1/research/${id}`, token),
+
+  delete: (id: string, token: string) => api.delete<void>(`/api/v1/research/${id}`, token),
+
+  streamProgress: (id: string, token: string): EventSource => {
+    const url = `${API_BASE}/api/v1/research/${id}/stream`;
+    const es = new EventSource(`${url}?token=${encodeURIComponent(token)}`);
+    return es;
+  },
+};
+
+export async function* streamResearchProgress(
+  reportId: string,
+  token: string,
+): AsyncGenerator<import("./api-types").ResearchProgressEvent> {
+  const url = `${API_BASE}/api/v1/research/${reportId}/stream`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok || !res.body) throw new ApiError(res.status, "Stream failed");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const raw = line.slice(6).trim();
+      if (!raw || raw === "[DONE]") continue;
+      try {
+        yield JSON.parse(raw);
+      } catch {
+        // skip malformed
+      }
+    }
+  }
+}
+
 export const agentsApi = {
   list: (
     params: {
