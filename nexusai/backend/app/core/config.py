@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
     STRIPE_PUBLISHABLE_KEY: str | None = None
+    STRIPE_PLUS_PRICE_ID: str | None = None
+    STRIPE_TEAM_PRICE_ID: str | None = None
 
     # ─── GCS ──────────────────────────────────────────────────
     GCS_BUCKET_NAME: str = "nexusai-files"

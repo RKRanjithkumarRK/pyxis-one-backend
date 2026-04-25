@@ -19,6 +19,7 @@ from app.api.v1.sharing import router as sharing_router
 from app.api.v1.search import router as search_router
 from app.api.v1.export import router as export_router
 from app.api.v1.settings import router as settings_router
+from app.api.v1.billing import router as billing_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(health_router)
@@ -41,3 +42,4 @@ api_router.include_router(sharing_router)
 api_router.include_router(search_router)
 api_router.include_router(export_router)
 api_router.include_router(settings_router)
+api_router.include_router(billing_router)
