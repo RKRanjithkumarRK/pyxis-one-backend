@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
     "NexusAI combines ChatGPT, Cursor, Perplexity, Midjourney and ElevenLabs into one unified AI platform.",
   keywords: ["AI", "chat", "code", "image generation", "voice", "research"],
   authors: [{ name: "NexusAI" }],
-  manifest: "/manifest.json",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -56,6 +57,9 @@ export default function RootLayout({
     >
       <body className="min-h-screen bg-background font-sans antialiased">
         <Providers>{children}</Providers>
+        <Script id="sw-register" strategy="afterInteractive">
+          {`if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }`}
+        </Script>
       </body>
     </html>
   );

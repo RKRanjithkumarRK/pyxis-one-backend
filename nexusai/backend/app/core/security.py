@@ -131,3 +131,19 @@ async def optional_bearer(
 ) -> HTTPAuthorizationCredentials | None:
     """Dependency that returns credentials if present, None otherwise."""
     return credentials
+
+
+async def _get_user_from_token(token: str, db: "AsyncSession") -> Any | None:
+    """Validate a raw JWT string and return the User row, or None if invalid."""
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        return None
+    if await is_revoked(payload.get("jti", "")):
+        return None
+    from app.repositories.user import UserRepository
+    import uuid as _uuid
+    try:
+        return await UserRepository.get_by_id(db, _uuid.UUID(payload["sub"]))
+    except Exception:
+        return None

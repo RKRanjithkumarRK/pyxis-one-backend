@@ -13,12 +13,12 @@ def _bucket():
     from google.cloud import storage as gcs
     from app.core.config import settings
     client = gcs.Client()
-    return client.bucket(settings.GCS_BUCKET)
+    return client.bucket(settings.GCS_BUCKET_NAME)
 
 
 def _use_gcs() -> bool:
     from app.core.config import settings
-    return bool(getattr(settings, "GCS_BUCKET", None))
+    return bool(getattr(settings, "GCS_BUCKET_NAME", None))
 
 
 def upload(path: str, content: bytes, content_type: str = "application/octet-stream") -> str:

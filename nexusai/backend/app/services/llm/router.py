@@ -222,3 +222,23 @@ async def _record_cost(user_id: str, route: ModelRoute, usage: dict) -> None:
 async def embed(texts: list[str], model: str = "text-embedding-3-large") -> list[list[float]]:
     resp = await aembedding(model=model, input=texts)
     return [d["embedding"] for d in resp.data]
+
+
+async def litellm_complete(model: str, messages: list[dict], **kwargs) -> str:
+    """Non-streaming single-turn completion with Redis cache. Returns assistant message content."""
+    import hashlib, json as _json
+    cache_key = "llm:cache:" + hashlib.sha256(
+        _json.dumps({"model": model, "messages": messages, **kwargs}, sort_keys=True).encode()
+    ).hexdigest()
+
+    cached = await redis_client.get(cache_key)
+    if cached:
+        return cached.decode()
+
+    with tracer.start_as_current_span("llm.complete") as span:
+        span.set_attribute("llm.model", model)
+        resp = await acompletion(model=model, messages=messages, stream=False, **kwargs)
+        content = resp.choices[0].message.content or ""
+
+    await redis_client.setex(cache_key, 3600, content)  # cache for 1 hour
+    return content
