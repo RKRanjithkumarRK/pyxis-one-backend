@@ -74,6 +74,10 @@ html2text==2024.2.26
 # ─── NexusCode (E2B sandbox) ──────────────────────────────
 e2b==1.0.5
 
+# ─── Settings (2FA + BYOK encryption) ────────────────────
+pyotp==2.9.0
+cryptography==43.0.3
+
 # ─── Misc ────────────────────────────────────────────────
 aiofiles==24.1.0
 orjson==3.10.12
