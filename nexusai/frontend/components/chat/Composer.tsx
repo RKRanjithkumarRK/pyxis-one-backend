@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, KeyboardEvent } from "react";
 import { ModelPicker } from "./ModelPicker";
+import { VoiceButton } from "@/components/voice/VoiceButton";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -73,6 +74,9 @@ export function Composer({ onSend, onStop, isStreaming, defaultModel = "claude-s
               >
                 🌐 Web
               </button>
+              <VoiceButton
+                onTranscript={(t) => setText((prev) => prev ? `${prev} ${t}` : t)}
+              />
             </div>
 
             <button
