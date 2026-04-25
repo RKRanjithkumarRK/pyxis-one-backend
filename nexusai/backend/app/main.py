@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
@@ -76,6 +76,12 @@ async def add_request_id(request: Request, call_next):
 
 
 app.include_router(api_router)
+
+
+@app.websocket("/ws/canvas/{doc_id}")
+async def canvas_websocket(websocket: WebSocket, doc_id: str):
+    from app.websocket.canvas import handle_canvas_ws
+    await handle_canvas_ws(websocket, doc_id)
 
 
 @app.get("/", include_in_schema=False)

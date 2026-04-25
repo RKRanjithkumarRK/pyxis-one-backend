@@ -35,8 +35,14 @@ export default function HomePage() {
             Start Chatting
           </Link>
           <Link
-            href="/code"
+            href="/canvas"
             className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground rounded-xl font-medium hover:bg-secondary/80 transition-colors"
+          >
+            Open Canvas
+          </Link>
+          <Link
+            href="/code"
+            className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground rounded-xl font-medium hover:bg-accent transition-colors"
           >
             Open NexusCode
           </Link>
@@ -56,7 +62,7 @@ export default function HomePage() {
         </div>
 
         <p className="text-xs text-muted-foreground/60">
-          Phase 1 — Foundation ready · All 7 providers wired · PostgreSQL + Redis + Qdrant
+          Phase 7 — Canvas ready · AI edits · Real-time collab · Version history · Export MD/HTML/DOCX
         </p>
       </div>
     </main>

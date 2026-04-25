@@ -174,6 +174,38 @@ export async function* streamResearchProgress(
   }
 }
 
+import type { CanvasDoc, CanvasDocListItem, CanvasDocVersion, AIEditResponse } from "./api-types";
+
+export const canvasApi = {
+  list: (token: string) => api.get<CanvasDocListItem[]>("/api/v1/canvas", token),
+  create: (title: string, token: string) =>
+    api.post<CanvasDoc>("/api/v1/canvas", { title }, token),
+  get: (id: string, token?: string) =>
+    api.get<CanvasDoc>(`/api/v1/canvas/${id}`, token),
+  update: (id: string, payload: Record<string, unknown>, token: string) =>
+    api.patch<CanvasDoc>(`/api/v1/canvas/${id}`, payload, token),
+  delete: (id: string, token: string) =>
+    api.delete<void>(`/api/v1/canvas/${id}`, token),
+  versions: (id: string, token: string) =>
+    api.get<CanvasDocVersion[]>(`/api/v1/canvas/${id}/versions`, token),
+  restoreVersion: (id: string, version: number, token: string) =>
+    api.post<CanvasDoc>(`/api/v1/canvas/${id}/versions/${version}/restore`, {}, token),
+  aiEdit: (
+    id: string,
+    selectedText: string,
+    instruction: string,
+    context: string,
+    token: string,
+  ) =>
+    api.post<AIEditResponse>(
+      `/api/v1/canvas/${id}/ai-edit`,
+      { selected_text: selectedText, instruction, context },
+      token,
+    ),
+  exportUrl: (id: string, format: "md" | "html" | "docx") =>
+    `${API_BASE}/api/v1/canvas/${id}/export?format=${format}`,
+};
+
 export const agentsApi = {
   list: (
     params: {

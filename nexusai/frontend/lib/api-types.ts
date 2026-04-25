@@ -108,6 +108,39 @@ export type ResearchProgressEvent = {
   sources_count?: number;
 };
 
+// ─── Canvas ──────────────────────────────────────────────
+export type CanvasDoc = {
+  id: string;
+  title: string;
+  content: Record<string, unknown> | null;
+  version: number;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CanvasDocListItem = {
+  id: string;
+  title: string;
+  version: number;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CanvasDocVersion = {
+  id: string;
+  document_id: string;
+  version: number;
+  title: string | null;
+  created_at: string;
+};
+
+export type AIEditResponse = {
+  original: string;
+  suggested: string;
+};
+
 export type CreateAgentPayload = {
   name: string;
   slug?: string;
