@@ -4,6 +4,8 @@ import { GeistMono } from "geist/font/mono";
 import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { MobileShell } from "@/components/mobile/MobileShell";
+import { TauriTitleBar } from "@/components/mobile/TauriTitleBar";
 
 export const metadata: Metadata = {
   title: {
@@ -56,7 +58,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background font-sans antialiased">
-        <Providers>{children}</Providers>
+        <Providers>
+          <TauriTitleBar />
+          <MobileShell>{children}</MobileShell>
+        </Providers>
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }`}
         </Script>
