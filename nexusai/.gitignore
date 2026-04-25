@@ -63,5 +63,7 @@ desktop.ini
 !package.json
 !tsconfig.json
 !public/manifest.json
+!.lighthouserc.json
+!src-tauri/tauri.conf.json
 service-account*.json
 credentials*.json

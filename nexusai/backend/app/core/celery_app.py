@@ -12,6 +12,7 @@ celery_app = Celery(
         "app.services.image.tasks",
         "app.services.workflows.tasks",
         "app.services.export.tasks",
+        "app.services.observability.tasks",
     ],
 )
 
@@ -28,7 +29,11 @@ celery_app.conf.update(
     beat_schedule={
         "workflow-schedule-check": {
             "task": "workflows.schedule_check",
-            "schedule": 60.0,  # every minute
+            "schedule": 60.0,
+        },
+        "slo-burn-check": {
+            "task": "observability.check_slo_burn",
+            "schedule": 300.0,  # every 5 minutes
         },
     },
 )

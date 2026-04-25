@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = None
     POSTHOG_API_KEY: str | None = None
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
+    PAGERDUTY_ROUTING_KEY: str | None = None
 
     # ─── Rate limiting ────────────────────────────────────────
     RATE_LIMIT_UNAUTHENTICATED: str = "20/minute"

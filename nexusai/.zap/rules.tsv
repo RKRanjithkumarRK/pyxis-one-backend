@@ -1,0 +1,12 @@
+10010	IGNORE	Cookie No HttpOnly Flag	False positives on non-session cookies
+10011	IGNORE	Cookie Without Secure Flag	Non-production scan
+10020	WARN	X-Frame-Options Header Not Set
+10021	WARN	X-Content-Type-Options Header Missing
+10038	WARN	Content Security Policy (CSP) Header Not Set
+10036	IGNORE	Server Leaks Version Information via "Server" HTTP Response Header Field	Nginx version disclosure acceptable
+10054	WARN	Cookie with SameSite Attribute None
+10055	IGNORE	CSP: Wildcard Directive
+40012	IGNORE	Cross Site Scripting (Reflected)	Tested separately via SAST
+40014	IGNORE	Cross Site Scripting (Persistent)	Tested separately via SAST
+40018	WARN	SQL Injection
+90033	WARN	Loosely Scoped Cookie

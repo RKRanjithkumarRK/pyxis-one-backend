@@ -14,6 +14,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
 from app.core.database import engine, AsyncSessionLocal
 from app.core.telemetry import setup_telemetry
+from app.core.metrics_middleware import MetricsMiddleware
 from app.api.v1 import api_router
 
 logger = logging.getLogger("nexusai")
@@ -65,6 +66,7 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(MetricsMiddleware)
 
 
 @app.middleware("http")
