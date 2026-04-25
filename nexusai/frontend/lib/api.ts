@@ -243,6 +243,43 @@ export const canvasApi = {
     `${API_BASE}/api/v1/canvas/${id}/export?format=${format}`,
 };
 
+import type { KnowledgeBase, KBFile } from "./api-types";
+
+export const kbApi = {
+  list: (token: string) => api.get<KnowledgeBase[]>("/api/v1/kb", token),
+
+  create: (payload: { name: string; description?: string; project_id?: string }, token: string) =>
+    api.post<KnowledgeBase>("/api/v1/kb", payload, token),
+
+  get: (id: string, token: string) => api.get<KnowledgeBase>(`/api/v1/kb/${id}`, token),
+
+  update: (id: string, payload: { name?: string; description?: string }, token: string) =>
+    api.patch<KnowledgeBase>(`/api/v1/kb/${id}`, payload, token),
+
+  delete: (id: string, token: string) => api.delete<void>(`/api/v1/kb/${id}`, token),
+
+  uploadFile: async (kbId: string, file: File, token: string): Promise<KBFile> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/api/v1/kb/${kbId}/files`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => res.text());
+      throw new ApiError(res.status, `Upload failed`, detail);
+    }
+    return res.json();
+  },
+
+  deleteFile: (kbId: string, fileId: string, token: string) =>
+    api.delete<void>(`/api/v1/kb/${kbId}/files/${fileId}`, token),
+
+  getFile: (kbId: string, fileId: string, token: string) =>
+    api.get<KBFile>(`/api/v1/kb/${kbId}/files/${fileId}`, token),
+};
+
 export const agentsApi = {
   list: (
     params: {

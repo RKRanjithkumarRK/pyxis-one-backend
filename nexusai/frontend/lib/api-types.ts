@@ -198,3 +198,24 @@ export type CreateAgentPayload = {
 };
 
 export type UpdateAgentPayload = Partial<CreateAgentPayload>;
+
+// ─── Knowledge Base ──────────────────────────────────────
+export type KBFileStatus = "pending" | "processing" | "done" | "error";
+
+export type KBFile = {
+  id: string;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  status: KBFileStatus;
+  chunk_count: number;
+  error_msg: string | null;
+};
+
+export type KnowledgeBase = {
+  id: string;
+  name: string;
+  description: string | null;
+  project_id: string | null;
+  files: KBFile[];
+};

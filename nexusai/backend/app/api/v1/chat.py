@@ -97,10 +97,16 @@ async def chat_stream(
         except Exception:
             pass  # memory never blocks the chat
 
-    # RAG retrieval (Phase 10 will fully implement; stub here)
-    rag_context: list = []
+    # RAG retrieval — hybrid BM25 + vector + Cohere rerank
     if kb_ids:
-        pass  # RAGService.hybrid_search wired in Phase 10
+        try:
+            from app.services.rag.retriever import retrieve, format_context
+            rag_chunks = await retrieve(db, kb_ids, user_message, top_n=8)
+            rag_block = format_context(rag_chunks)
+            if rag_block:
+                system_parts.append(rag_block)
+        except Exception:
+            pass  # RAG failure never blocks the chat
 
     # Web search (Phase 6 will fully implement; stub here)
     web_results: list = []
