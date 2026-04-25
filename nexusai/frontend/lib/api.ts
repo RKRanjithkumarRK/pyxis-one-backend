@@ -174,6 +174,33 @@ export async function* streamResearchProgress(
   }
 }
 
+import type { Project, ProjectMember, ProjectConversation } from "./api-types";
+
+export const projectsApi = {
+  list: (token: string) => api.get<Project[]>("/api/v1/projects", token),
+  create: (
+    payload: { name: string; description?: string; system_prompt?: string; icon_url?: string },
+    token: string,
+  ) => api.post<Project>("/api/v1/projects", payload, token),
+  get: (id: string, token: string) => api.get<Project>(`/api/v1/projects/${id}`, token),
+  update: (
+    id: string,
+    payload: { name?: string; description?: string; system_prompt?: string; icon_url?: string },
+    token: string,
+  ) => api.patch<Project>(`/api/v1/projects/${id}`, payload, token),
+  delete: (id: string, token: string) => api.delete<void>(`/api/v1/projects/${id}`, token),
+  members: (id: string, token: string) =>
+    api.get<ProjectMember[]>(`/api/v1/projects/${id}/members`, token),
+  invite: (id: string, email: string, role: string, token: string) =>
+    api.post<ProjectMember>(`/api/v1/projects/${id}/members`, { email, role }, token),
+  updateMemberRole: (id: string, userId: string, role: string, token: string) =>
+    api.patch<ProjectMember>(`/api/v1/projects/${id}/members/${userId}`, { role }, token),
+  removeMember: (id: string, userId: string, token: string) =>
+    api.delete<void>(`/api/v1/projects/${id}/members/${userId}`, token),
+  conversations: (id: string, token: string) =>
+    api.get<ProjectConversation[]>(`/api/v1/projects/${id}/conversations`, token),
+};
+
 import type { UserMemory, MemoryStats } from "./api-types";
 
 export const memoryApi = {

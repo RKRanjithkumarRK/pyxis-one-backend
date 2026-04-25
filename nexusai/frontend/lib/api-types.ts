@@ -108,6 +108,36 @@ export type ResearchProgressEvent = {
   sources_count?: number;
 };
 
+// ─── Projects ────────────────────────────────────────────
+export type ProjectRole = "owner" | "editor" | "viewer";
+
+export type Project = {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string | null;
+  system_prompt: string | null;
+  icon_url: string | null;
+  role: ProjectRole | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectMember = {
+  user_id: string;
+  project_id: string;
+  role: ProjectRole;
+  email: string | null;
+};
+
+export type ProjectConversation = {
+  id: string;
+  title: string;
+  model_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
 // ─── Memory ──────────────────────────────────────────────
 export type UserMemory = {
   id: string;
