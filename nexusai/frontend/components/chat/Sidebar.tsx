@@ -102,6 +102,7 @@ export function Sidebar({ onNewChat }: Props) {
           { label: "Agents",       href: "/agents",       icon: "🤖" },
           { label: "Research",     href: "/research",     icon: "🔬" },
           { label: "Canvas",       href: "/canvas",       icon: "📝" },
+          { label: "Memory",       href: "/memory",       icon: "🧠" },
           { label: "Image Studio", href: "/image",        icon: "🎨" },
         ].map((item) => (
           <Link

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useChatStore } from "@/lib/store/chat";
@@ -8,6 +8,7 @@ import { useChat } from "@/hooks/use-chat";
 import { MessageList } from "@/components/chat/MessageList";
 import { Composer } from "@/components/chat/Composer";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import type { Message } from "@/lib/types";
 
 export default function ConversationPage() {
@@ -17,6 +18,8 @@ export default function ConversationPage() {
   const { sendMessage, stopStream, isStreaming, streamBuffer, currentMessages } =
     useChat(conversationId);
   const [loadError, setLoadError] = useState(false);
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [togglingMemory, setTogglingMemory] = useState(false);
 
   const token = (session?.user as Record<string, unknown>)?.accessToken as string | undefined;
 
@@ -26,10 +29,32 @@ export default function ConversationPage() {
     setActive(conversationId);
 
     api
-      .get<{ messages: Message[] }>(`/api/v1/conversations/${conversationId}/messages`, token)
-      .then((data) => setMessages(conversationId, data.messages))
+      .get<{ messages: Message[]; memory_enabled?: boolean }>(`/api/v1/conversations/${conversationId}/messages`, token)
+      .then((data) => {
+        setMessages(conversationId, data.messages);
+      })
       .catch(() => setLoadError(true));
+
+    // Load conversation metadata for memory toggle
+    api
+      .get<{ memory_enabled: boolean }>(`/api/v1/conversations/${conversationId}`, token)
+      .then((conv) => setMemoryEnabled(conv.memory_enabled ?? true))
+      .catch(() => {});
   }, [conversationId, token, setActive, setMessages]);
+
+  const handleToggleMemory = useCallback(async () => {
+    if (!token || togglingMemory) return;
+    setTogglingMemory(true);
+    const next = !memoryEnabled;
+    setMemoryEnabled(next);
+    try {
+      await api.patch(`/api/v1/conversations/${conversationId}`, { memory_enabled: next }, token);
+    } catch {
+      setMemoryEnabled(!next); // revert on failure
+    } finally {
+      setTogglingMemory(false);
+    }
+  }, [conversationId, token, memoryEnabled, togglingMemory]);
 
   const handleSend = async (text: string, model: string, opts: { webSearch: boolean }) => {
     await sendMessage(text, { model, webSearch: opts.webSearch });
@@ -55,6 +80,23 @@ export default function ConversationPage() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Conversation header with memory toggle */}
+      <div className="flex items-center justify-end gap-2 border-b border-border px-4 py-2 shrink-0">
+        <button
+          onClick={handleToggleMemory}
+          disabled={togglingMemory}
+          title={memoryEnabled ? "Memory on — click to disable for this chat" : "Memory off — click to enable"}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
+            memoryEnabled
+              ? "bg-primary/10 text-primary hover:bg-primary/20"
+              : "text-muted-foreground hover:bg-accent border border-border",
+          )}
+        >
+          <span>🧠</span>
+          <span>{memoryEnabled ? "Memory on" : "Memory off"}</span>
+        </button>
+      </div>
       <MessageList
         messages={currentMessages}
         conversationId={conversationId}

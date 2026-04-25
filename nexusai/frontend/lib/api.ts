@@ -174,6 +174,16 @@ export async function* streamResearchProgress(
   }
 }
 
+import type { UserMemory, MemoryStats } from "./api-types";
+
+export const memoryApi = {
+  list: (token: string) => api.get<UserMemory[]>("/api/v1/memory", token),
+  stats: (token: string) => api.get<MemoryStats>("/api/v1/memory/stats", token),
+  delete: (id: string, token: string) => api.delete<void>(`/api/v1/memory/${id}`, token),
+  clearAll: (token: string) =>
+    request<{ deleted: number }>("/api/v1/memory", { method: "DELETE", token }),
+};
+
 import type { CanvasDoc, CanvasDocListItem, CanvasDocVersion, AIEditResponse } from "./api-types";
 
 export const canvasApi = {

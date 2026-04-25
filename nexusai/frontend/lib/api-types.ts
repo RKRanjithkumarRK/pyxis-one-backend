@@ -108,6 +108,19 @@ export type ResearchProgressEvent = {
   sources_count?: number;
 };
 
+// ─── Memory ──────────────────────────────────────────────
+export type UserMemory = {
+  id: string;
+  fact: string;
+  use_count: number;
+  created_at: string;
+  last_used_at: string | null;
+};
+
+export type MemoryStats = {
+  count: number;
+};
+
 // ─── Canvas ──────────────────────────────────────────────
 export type CanvasDoc = {
   id: string;

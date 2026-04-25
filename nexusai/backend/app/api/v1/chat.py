@@ -85,9 +85,17 @@ async def chat_stream(
         if project_prompt:
             system_parts.append(project_prompt)
 
-    # Memory retrieval (Phase 8 will fully implement; stub here)
-    if use_memory:
-        pass  # MemoryService.retrieve_for wired in Phase 8
+    # Memory retrieval — inject relevant memories into the system prompt
+    effective_memory = use_memory and conv.memory_enabled
+    if effective_memory:
+        from app.services.memory.service import retrieve_for_message, build_memory_block
+        try:
+            memory_facts = await retrieve_for_message(db, user_id, user_message)
+            memory_block = build_memory_block(memory_facts)
+            if memory_block:
+                system_parts.append(memory_block)
+        except Exception:
+            pass  # memory never blocks the chat
 
     # RAG retrieval (Phase 10 will fully implement; stub here)
     rag_context: list = []
@@ -170,6 +178,19 @@ async def chat_stream(
                     user_id=user_id,
                 )
                 yield f"data: {json.dumps({'type': 'message_id', 'message_id': str(msg_id)})}\n\n"
+
+                # Trigger async memory extraction (fire-and-forget via Celery)
+                if effective_memory and not is_guest:
+                    try:
+                        from app.services.memory.tasks import extract_memory
+                        extract_memory.delay(
+                            str(user_id),
+                            user_message[:2000],
+                            assistant_buf[:2000],
+                            str(msg_id),
+                        )
+                    except Exception:
+                        pass  # memory task failure never affects chat
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
