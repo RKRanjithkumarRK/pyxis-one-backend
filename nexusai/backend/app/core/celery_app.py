@@ -11,6 +11,7 @@ celery_app = Celery(
         "app.services.research.tasks",
         "app.services.image.tasks",
         "app.services.workflows.tasks",
+        "app.services.export.tasks",
     ],
 )
 
