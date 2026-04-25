@@ -243,6 +243,35 @@ export const canvasApi = {
     `${API_BASE}/api/v1/canvas/${id}/export?format=${format}`,
 };
 
+import type { ImageRequest } from "./api-types";
+
+export const imageApi = {
+  generate: (
+    payload: {
+      prompt: string;
+      negative_prompt?: string;
+      model?: string;
+      width?: number;
+      height?: number;
+      num_images?: number;
+    },
+    token: string,
+  ) => api.post<ImageRequest>("/api/v1/image/generate", payload, token),
+
+  getRequest: (id: string, token: string) =>
+    api.get<ImageRequest>(`/api/v1/image/generate/${id}`, token),
+
+  history: (token: string) => api.get<ImageRequest[]>("/api/v1/image/history", token),
+
+  models: () => api.get<{ models: Array<{ id: string; backend: string; model: string }> }>("/api/v1/image/models"),
+
+  upscale: (imageUrl: string, scale: number, token: string) =>
+    api.post<{ url: string }>("/api/v1/image/upscale", { image_url: imageUrl, scale }, token),
+
+  removeBg: (imageUrl: string, token: string) =>
+    api.post<{ url: string }>("/api/v1/image/remove-background", { image_url: imageUrl }, token),
+};
+
 import type { KnowledgeBase, KBFile } from "./api-types";
 
 export const kbApi = {

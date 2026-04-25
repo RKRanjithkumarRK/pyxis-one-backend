@@ -199,6 +199,22 @@ export type CreateAgentPayload = {
 
 export type UpdateAgentPayload = Partial<CreateAgentPayload>;
 
+// ─── Image Studio ────────────────────────────────────────
+export type ImageStatus = "pending" | "processing" | "done" | "error";
+
+export type ImageRequest = {
+  id: string;
+  prompt: string;
+  model: string;
+  width: number;
+  height: number;
+  num_images: number;
+  status: ImageStatus;
+  result_urls: string[] | null;
+  error_msg: string | null;
+  created_at: string;
+};
+
 // ─── Knowledge Base ──────────────────────────────────────
 export type KBFileStatus = "pending" | "processing" | "done" | "error";
 

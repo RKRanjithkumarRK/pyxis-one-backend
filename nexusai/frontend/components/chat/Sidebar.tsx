@@ -105,7 +105,7 @@ export function Sidebar({ onNewChat }: Props) {
           { label: "Canvas",       href: "/canvas",       icon: "📝" },
           { label: "Knowledge",    href: "/kb",            icon: "🗂️" },
           { label: "Memory",       href: "/memory",       icon: "🧠" },
-          { label: "Image Studio", href: "/image",        icon: "🎨" },
+          { label: "Image Studio", href: "/image",         icon: "🎨" },
         ].map((item) => (
           <Link
             key={item.href}

@@ -10,6 +10,7 @@ from app.api.v1.canvas import router as canvas_router
 from app.api.v1.memory import router as memory_router
 from app.api.v1.projects import router as projects_router
 from app.api.v1.knowledge_base import router as kb_router
+from app.api.v1.image import router as image_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(health_router)
@@ -23,3 +24,4 @@ api_router.include_router(canvas_router)
 api_router.include_router(memory_router)
 api_router.include_router(projects_router)
 api_router.include_router(kb_router)
+api_router.include_router(image_router)
