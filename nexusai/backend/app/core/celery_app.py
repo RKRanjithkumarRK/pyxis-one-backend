@@ -10,6 +10,7 @@ celery_app = Celery(
         "app.services.rag.tasks",
         "app.services.research.tasks",
         "app.services.image.tasks",
+        "app.services.workflows.tasks",
     ],
 )
 
@@ -23,5 +24,10 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     result_expires=3600,
-    beat_schedule={},
+    beat_schedule={
+        "workflow-schedule-check": {
+            "task": "workflows.schedule_check",
+            "schedule": 60.0,  # every minute
+        },
+    },
 )
