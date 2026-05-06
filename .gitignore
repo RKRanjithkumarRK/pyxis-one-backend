@@ -30,3 +30,11 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Graphify — keep human-readable artifacts in git, but rebuild the binary
+# graph + cache locally on each machine via `graphify update .`
+graphify-out/graph.json
+graphify-out/graph.html
+graphify-out/manifest.json
+graphify-out/cache/
+graphify-out/.graphify_root
